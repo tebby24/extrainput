@@ -1,0 +1,4 @@
+openai==1.65.4
+azure-cognitiveservices-speech==1.42.0
+dotenv==0.9.9
+pydub==0.25.1
