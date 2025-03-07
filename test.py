@@ -1,4 +1,4 @@
-from extrainput import TextGenerator, TTSEngine, ExtraInputGenerator
+from extrainput.extrainput import TextGenerator, TTSEngine, ExtraInputGenerator
 from dotenv import load_dotenv
 import os
 
