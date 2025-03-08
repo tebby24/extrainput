@@ -5,7 +5,6 @@ A Python package for generating language learning audio content using AI text ge
 
 ```bash
 pip install git+https://github.com/tebby24/extrainput.git
-pip install git+https://github.com/tebby24/extrainput.git
 ```
 ## Usage
 
