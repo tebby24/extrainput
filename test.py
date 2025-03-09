@@ -19,8 +19,8 @@ load_dotenv()
 TEST_CONFIG = {
     'text_generator': False,     # Test TextGenerator
     'simple_tts': False,         # Test SimpleTTSGenerator
-    'tts_with_subs': True,      # Test TTSWithSubsGenerator
-    'example_listener': False,   # Test ExampleSentenceListenerGenerator
+    'tts_with_subs': False,      # Test TTSWithSubsGenerator
+    'example_listener': True,   # Test ExampleSentenceListenerGenerator
     'image_generator': False,    # Test ImageGenerator
     'video_generator': False,    # Test VideoGenerator
     'example_content': False     # Test ExampleContentGenerator
@@ -29,14 +29,11 @@ TEST_CONFIG = {
 class TestExtraInput(unittest.TestCase):
     def setUp(self):
         # Get API keys from environment variables
-        self.deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
         self.azure_speech_key = os.getenv("AZURE_SPEECH_KEY")
         self.azure_speech_region = os.getenv("AZURE_SPEECH_REGION")
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
         
         # Skip tests if credentials are not available
-        if not self.deepseek_api_key:
-            print("Warning: DEEPSEEK_API_KEY not found, some tests will be skipped")
         if not all([self.azure_speech_key, self.azure_speech_region]):
             print("Warning: Azure Speech credentials not found, some tests will be skipped")
         if not self.openai_api_key:
@@ -60,10 +57,10 @@ class TestExtraInput(unittest.TestCase):
     
     def test_text_generator(self):
         """Test text generation functionality"""
-        if not self.deepseek_api_key:
-            self.skipTest("Deepseek API key not available")
+        if not self.openai_api_key:
+            self.skipTest("OpenAI API key not available")
             
-        text_gen = TextGenerator(deepseek_api_key=self.deepseek_api_key)
+        text_gen = TextGenerator(openai_api_key=self.openai_api_key)
         result = text_gen.generate_text("请用'好'字造一个简单的句子")
         
         # Check that we got a non-empty result
@@ -83,20 +80,18 @@ class TestExtraInput(unittest.TestCase):
         self.assertTrue(result and isinstance(result, str))
         print(f"Generated text based on input file: {result}")
         
-        # Test JSON mode if OpenAI key is available
-        if self.openai_api_key:
-            text_gen = TextGenerator(openai_api_key=self.openai_api_key)
-            result = text_gen.generate_text(
-                "Generate a JSON object with keys 'word' and 'translation' for the word '你好'", 
-                model="gpt-4o-mini", 
-                json_mode=True
-            )
-            self.assertTrue(result and isinstance(result, str))
-            # Check if result is valid JSON
-            import json
-            json_result = json.loads(result)
-            self.assertTrue(isinstance(json_result, dict))
-            print(f"Generated JSON: {json_result}")
+        # Test JSON mode
+        result = text_gen.generate_text(
+            "Generate a JSON object with keys 'word' and 'translation' for the word '你好'", 
+            model="gpt-4o-mini", 
+            json_mode=True
+        )
+        self.assertTrue(result and isinstance(result, str))
+        # Check if result is valid JSON
+        import json
+        json_result = json.loads(result)
+        self.assertTrue(isinstance(json_result, dict))
+        print(f"Generated JSON: {json_result}")
     
     def test_simple_tts(self):
         """Test simple TTS generation"""
@@ -156,11 +151,11 @@ class TestExtraInput(unittest.TestCase):
     
     def test_example_sentence_listener(self):
         """Test example sentence listener generation"""
-        if not all([self.deepseek_api_key, self.azure_speech_key, self.azure_speech_region]):
+        if not all([self.openai_api_key, self.azure_speech_key, self.azure_speech_region]):
             self.skipTest("API credentials not available")
             
         esl_gen = ExampleSentenceListenerGenerator(
-            self.deepseek_api_key, 
+            self.openai_api_key, 
             self.azure_speech_key, 
             self.azure_speech_region
         )

@@ -16,21 +16,16 @@ import tempfile
 from moviepy import AudioFileClip, ImageClip
 
 class TextGenerator:
-    def __init__(self, deepseek_api_key=None, openai_api_key=None):
-        """Initialize text generator with API keys for different providers.
+    def __init__(self, openai_api_key):
+        """Initialize text generator with API key for OpenAI.
         
         Args:
-            deepseek_api_key (str, optional): API key for Deepseek models
-            openai_api_key (str, optional): API key for OpenAI models
+            openai_api_key (str): API key for OpenAI models (required)
         """
-        self.deepseek_client = None
-        self.openai_client = None
-        
-        if deepseek_api_key:
-            self.deepseek_client = OpenAI(api_key=deepseek_api_key, base_url="https://api.deepseek.com")
-        
-        if openai_api_key:
-            self.openai_client = OpenAI(api_key=openai_api_key)
+        if not openai_api_key:
+            raise ValueError("OpenAI API key is required")
+            
+        self.openai_client = OpenAI(api_key=openai_api_key)
 
     def get_models(self):
         """
@@ -39,7 +34,7 @@ class TextGenerator:
         Returns:
             tuple: A tuple containing the names of the available models.
         """
-        return ("deepseek-chat", "gpt-4o-mini", "gpt-4o")
+        return ("gpt-4o-mini", "gpt-4o")
 
     def generate_text(self, prompt, model="gpt-4o-mini", json_mode=False):
         """Generate text based on a prompt using the specified model.
@@ -49,45 +44,15 @@ class TextGenerator:
             model (str, optional): Model to use. Options: 
                 - "gpt-4o-mini" (default)
                 - "gpt-4o"
-                - "deepseek-chat" 
-            json_mode (bool, optional): If True, instructs the model to return JSON. 
-                Works with OpenAI models only, ignored for deepseek-chat.
+            json_mode (bool, optional): If True, instructs the model to return JSON.
                 
         Returns:
             str: Generated text response
             
         Raises:
-            ValueError: If the required API client for the selected model is not initialized
             ValueError: If an unsupported model is specified
-            ValueError: If json_mode is True but model doesn't support it
         """
-        if model == "deepseek-chat":
-            if not self.deepseek_client:
-                raise ValueError("Deepseek API key is required to use the deepseek-chat model")
-                
-            if json_mode:
-                # Deepseek doesn't support json_mode parameter directly
-                # Add JSON instructions to the prompt
-                system_content = "You are a helpful assistant. Always respond with valid JSON."
-                user_content = f"Return your response as valid JSON. {prompt}"
-            else:
-                system_content = "You are a helpful assistant"
-                user_content = prompt
-                
-            response = self.deepseek_client.chat.completions.create(
-                model="deepseek-chat",
-                messages=[
-                    {"role": "system", "content": system_content},
-                    {"role": "user", "content": user_content},
-                ],
-                stream=False
-            )
-            return response.choices[0].message.content
-            
-        elif model in ["gpt-4o-mini", "gpt-4o"]:
-            if not self.openai_client:
-                raise ValueError(f"OpenAI API key is required to use the {model} model")
-                
+        if model in ["gpt-4o-mini", "gpt-4o"]:
             response = self.openai_client.chat.completions.create(
                 model=model,
                 messages=[
@@ -100,7 +65,7 @@ class TextGenerator:
             return response.choices[0].message.content
             
         else:
-            raise ValueError(f"Unsupported model: {model}. Supported models: deepseek-chat, gpt-4o-mini, gpt-4o")
+            raise ValueError(f"Unsupported model: {model}. Supported models: gpt-4o-mini, gpt-4o")
 
 class ImageGenerator:
     def __init__(self, openai_api_key):
@@ -228,8 +193,11 @@ class ExampleSentenceListenerGenerator:
         return voice
 
     def generate_example_sentence_listener(self, words, output_filepath):
+        print("Starting to generate example sentence listener...")
+
         # Functions to get data for a single word
         def get_word_data(word) -> Tuple[str, List[str]]:
+            print(f"Fetching data for word: {word}")
             translation = self.get_translation(word)
             example_sentences = self.get_example_sentences(word)
             return translation, example_sentences
@@ -246,6 +214,7 @@ class ExampleSentenceListenerGenerator:
                 try:
                     translation, example_sentences = future.result()
                     word_data_map[word] = (translation, example_sentences)
+                    print(f"Data fetched for word: {word}")
                 except Exception as e:
                     print(f"Error processing word '{word}': {e}")
         
@@ -259,12 +228,14 @@ class ExampleSentenceListenerGenerator:
             
             # Ensure the directory exists
             os.makedirs("bin/tmp", exist_ok=True)
+            print(f"Generating audio for word: {word}")
             audios.append(self.tts_engine.synthesize_speech(word, self.get_random_voice(), f"bin/tmp/{word}_word.wav"))
             audios.append(self.tts_engine.synthesize_speech(translation, self.get_random_voice(), f"bin/tmp/{word}_translation.wav"))
 
             for index, sentence in enumerate(example_sentences):
                 voice_1 = self.get_random_voice()
                 voice_2 = self.get_random_voice(exclude=voice_1)
+                print(f"Generating audio for sentence {index+1} of word: {word}")
                 audios.append(self.tts_engine.synthesize_speech(
                     sentence, 
                     voice_1, 
@@ -274,8 +245,9 @@ class ExampleSentenceListenerGenerator:
                     sentence, 
                     voice_2, 
                     f"bin/tmp/{word}_sentence_{index+1}_b.wav"
-
                 ))
+
+        print("Combining audio segments...")
         combined_audio = AudioSegment.silent(duration=200)
         for audio_path in audios:
             if ('_word' in audio_path):
@@ -283,7 +255,9 @@ class ExampleSentenceListenerGenerator:
             audio_segment = AudioSegment.from_wav(audio_path)
             combined_audio += audio_segment + AudioSegment.silent(duration=500)  # 0.5 second of silence between segments
 
+        print(f"Exporting combined audio to {output_filepath}")
         combined_audio.export(output_filepath, format="wav")
+        print("Example sentence listener generation complete!")
         return output_filepath
 
 
