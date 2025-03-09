@@ -202,8 +202,8 @@ class SimpleTTSGenerator:
 
 
 class ExampleSentenceListenerGenerator:
-    def __init__(self, deepseek_api_key, azure_speech_key, azure_speech_region):
-        self.text_generator = TextGenerator(deepseek_api_key)
+    def __init__(self, openai_api_key, azure_speech_key, azure_speech_region):
+        self.text_generator = TextGenerator(openai_api_key=openai_api_key)
         self.tts_engine = SimpleTTSGenerator(azure_speech_key, azure_speech_region)
     
     def get_example_sentences(self, word, num_sentences=3):
