@@ -2,3 +2,7 @@ openai==1.65.4
 azure-cognitiveservices-speech==1.42.0
 dotenv==0.9.9
 pydub==0.25.1
+moviepy==2.1.2
+requests==2.32.3
+srt==3.5.3
+typing_extensions==4.12.2

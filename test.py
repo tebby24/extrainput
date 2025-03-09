@@ -7,11 +7,24 @@ from extrainput import (
     TTSWithSubsGenerator, 
     ExampleSentenceListenerGenerator, 
     VideoGenerator,
-    ImageGenerator
+    ImageGenerator,
+    ExampleContentGenerator
 )
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Dictionary to store test configurations
+# Set to True to run the test, False to skip
+TEST_CONFIG = {
+    'text_generator': False,     # Test TextGenerator
+    'simple_tts': False,         # Test SimpleTTSGenerator
+    'tts_with_subs': True,      # Test TTSWithSubsGenerator
+    'example_listener': False,   # Test ExampleSentenceListenerGenerator
+    'image_generator': False,    # Test ImageGenerator
+    'video_generator': False,    # Test VideoGenerator
+    'example_content': False     # Test ExampleContentGenerator
+}
 
 class TestExtraInput(unittest.TestCase):
     def setUp(self):
@@ -50,7 +63,7 @@ class TestExtraInput(unittest.TestCase):
         if not self.deepseek_api_key:
             self.skipTest("Deepseek API key not available")
             
-        text_gen = TextGenerator(self.deepseek_api_key)
+        text_gen = TextGenerator(deepseek_api_key=self.deepseek_api_key)
         result = text_gen.generate_text("请用'好'字造一个简单的句子")
         
         # Check that we got a non-empty result
@@ -69,6 +82,21 @@ class TestExtraInput(unittest.TestCase):
         result = text_gen.generate_text(prompt)
         self.assertTrue(result and isinstance(result, str))
         print(f"Generated text based on input file: {result}")
+        
+        # Test JSON mode if OpenAI key is available
+        if self.openai_api_key:
+            text_gen = TextGenerator(openai_api_key=self.openai_api_key)
+            result = text_gen.generate_text(
+                "Generate a JSON object with keys 'word' and 'translation' for the word '你好'", 
+                model="gpt-4o-mini", 
+                json_mode=True
+            )
+            self.assertTrue(result and isinstance(result, str))
+            # Check if result is valid JSON
+            import json
+            json_result = json.loads(result)
+            self.assertTrue(isinstance(json_result, dict))
+            print(f"Generated JSON: {json_result}")
     
     def test_simple_tts(self):
         """Test simple TTS generation"""
@@ -115,7 +143,7 @@ class TestExtraInput(unittest.TestCase):
         
         # Test with text from file
         with open(self.test_text_path, "r", encoding="utf-8") as f:
-            sample_text = f.read().split("\n\n")[0]  # Use first paragraph
+            sample_text = f.read()
             
         mp3_output_2 = "bin/test/output/tts_with_subs_file_test.mp3"
         srt_output_2 = "bin/test/output/tts_with_subs_file_test.srt"
@@ -199,7 +227,9 @@ class TestExtraInput(unittest.TestCase):
         if not os.path.exists(self.test_image_path) or not os.path.exists(self.test_audio_path):
             self.skipTest("Test image or audio file not available")
         
-        VideoGenerator.generate_video(self.test_image_path, self.test_audio_path, output_video)
+        # Create VideoGenerator instance (new requirement)
+        video_gen = VideoGenerator()
+        video_gen.generate_video(self.test_image_path, self.test_audio_path, output_video)
         
         # Check that video file was created
         self.assertTrue(os.path.exists(output_video))
@@ -218,12 +248,78 @@ class TestExtraInput(unittest.TestCase):
             
             # Generate video
             output_video_2 = "bin/test/output/generated_video_test.mp4"
-            VideoGenerator.generate_video(image_path, audio_path, output_video_2)
+            video_gen.generate_video(image_path, audio_path, output_video_2)
             
             # Check that video file was created
             self.assertTrue(os.path.exists(output_video_2))
+    
+    def test_example_content_generator(self):
+        """Test example content generator"""
+        if not self.openai_api_key:
+            self.skipTest("OpenAI API key not available")
+            
+        # Initialize example content generator
+        content_gen = ExampleContentGenerator(self.openai_api_key)
+        
+        # Test word grouping
+        words = ["苹果", "香蕉", "樱桃", "狗", "猫", "大象", "吉他", "钢琴", "小提琴", "河流", "海洋", "湖泊"]
+        grouped_words = content_gen.create_word_groups(words, group_min_size=3, group_max_size=5)
+        
+        # Check that we got a list of groups
+        self.assertTrue(isinstance(grouped_words, list))
+        
+        # Check that each group has the required size
+        for group in grouped_words:
+            self.assertTrue(isinstance(group, list))
+            self.assertTrue(3 <= len(group) <= 5)
+            
+        print(f"Grouped words: {grouped_words}")
+        
+        # Test generate example content
+        if len(grouped_words) > 0:
+            content = content_gen.generate_example_content(grouped_words[0])
+            self.assertTrue(isinstance(content, str))
+            self.assertTrue(len(content) > 0)
+            print(f"Generated content sample: {content[:100]}...")
+            
+            # Test voice pairing
+            voice = content_gen.pair_voice_to_content(content, SimpleTTSGenerator.voices)
+            self.assertTrue(isinstance(voice, str))
+            self.assertTrue(voice in [v["name"] for v in SimpleTTSGenerator.voices])
+            print(f"Selected voice: {voice}")
+
+def run_tests():
+    """Run the selected tests based on the TEST_CONFIG dictionary"""
+    suite = unittest.TestSuite()
+    
+    # Add tests based on configuration
+    if TEST_CONFIG.get('text_generator', False):
+        suite.addTest(TestExtraInput('test_text_generator'))
+        
+    if TEST_CONFIG.get('simple_tts', False):
+        suite.addTest(TestExtraInput('test_simple_tts'))
+        
+    if TEST_CONFIG.get('tts_with_subs', False):
+        suite.addTest(TestExtraInput('test_tts_with_subtitles'))
+        
+    if TEST_CONFIG.get('example_listener', False):
+        suite.addTest(TestExtraInput('test_example_sentence_listener'))
+        
+    if TEST_CONFIG.get('image_generator', False):
+        suite.addTest(TestExtraInput('test_image_generator'))
+        
+    if TEST_CONFIG.get('video_generator', False):
+        suite.addTest(TestExtraInput('test_video_generator'))
+        
+    if TEST_CONFIG.get('example_content', False):
+        suite.addTest(TestExtraInput('test_example_content_generator'))
+
+    runner = unittest.TextTestRunner(verbosity=2)
+    runner.run(suite)
 
 if __name__ == "__main__":
-    unittest.main()
+    # Option 1: Run specific tests by modifying the TEST_CONFIG dictionary
+    run_tests()
     
-
+    # Option 2: Run all tests with unittest.main()
+    # unittest.main()
