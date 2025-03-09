@@ -41,15 +41,15 @@ class TextGenerator:
         """
         return ("deepseek-chat", "gpt-4o-mini", "gpt-4o")
 
-    def generate_text(self, prompt, model="deepseek-chat", json_mode=False):
+    def generate_text(self, prompt, model="gpt-4o-mini", json_mode=False):
         """Generate text based on a prompt using the specified model.
         
         Args:
             prompt (str): The prompt to generate text from
             model (str, optional): Model to use. Options: 
-                - "deepseek-chat" (default)
-                - "gpt-4o-mini"
+                - "gpt-4o-mini" (default)
                 - "gpt-4o"
+                - "deepseek-chat" 
             json_mode (bool, optional): If True, instructs the model to return JSON. 
                 Works with OpenAI models only, ignored for deepseek-chat.
                 
@@ -104,27 +104,29 @@ class TextGenerator:
 
 class ImageGenerator:
     def __init__(self, openai_api_key):
-        """Initialize the DALL-E image generator with OpenAI API key.
-        
+        """
+        Initialize the ImageGenerator with the OpenAI API key.
+
         Args:
-            openai_api_key (str): OpenAI API key for accessing DALL-E
+            openai_api_key (str): The OpenAI API key for accessing DALL-E and GPT models.
         """
         self.client = OpenAI(api_key=openai_api_key)
+        self.text_generator = TextGenerator(openai_api_key=openai_api_key)
     
     def generate_image(self, prompt, output_filepath, size="1792x1024", quality="standard", model="dall-e-3"):
-        """Generate a landscape-oriented image using DALL-E 3.
-        
-        Args:
-            prompt (str): Description of the image to generate
-            output_filepath (str, optional): Path to save the generated image
-            size (str, optional): Size of the image - using 1792x1024 for landscape orientation
-            quality (str, optional): Image quality - "standard" or "hd"
-            model (str, optional): DALL-E model version
-            
-        Returns:
-            str: URL of the generated image or path to saved image if output_filepath is provided
         """
-        # Enhance prompt to ensure landscape orientation
+        Generate an image using DALL-E 3 based on the provided prompt.
+
+        Args:
+            prompt (str): The description of the image to generate.
+            output_filepath (str): The file path where the generated image will be saved.
+            size (str, optional): The size of the image. Defaults to "1792x1024".
+            quality (str, optional): The quality of the image. Defaults to "standard".
+            model (str, optional): The DALL-E model version to use. Defaults to "dall-e-3".
+
+        Returns:
+            str: The file path to the saved image.
+        """
         enhanced_prompt = f"{prompt} (landscape orientation, wide format, horizontal composition)"
         
         try:
@@ -138,7 +140,6 @@ class ImageGenerator:
             
             image_url = response.data[0].url
             
-            # Save the image if output filepath is provided
             image_data = requests.get(image_url).content
             with open(output_filepath, 'wb') as image_file:
                 image_file.write(image_data)
@@ -147,6 +148,25 @@ class ImageGenerator:
         except Exception as e:
             print(f"Error generating image: {str(e)}")
             return None
+
+    def generate_image_representing_content(self, content, output_filepath, size="1792x1024", quality="standard", model="dall-e-3"):
+        """
+        Generate an image representing the given content using DALL-E 3.
+
+        Args:
+            content (str): The content or story to be represented in the image.
+            output_filepath (str): The file path where the generated image will be saved.
+            size (str, optional): The size of the image. Defaults to "1792x1024".
+            quality (str, optional): The quality of the image. Defaults to "standard".
+            model (str, optional): The DALL-E model version to use. Defaults to "dall-e-3".
+
+        Returns:
+            str: The file path to the saved image.
+        """
+        image_meta_prompt = "请编写 Dall-E 3 提示语，用于生成一个图像来表现下面的故事。只提供提示，不提供其他文字。:\n\n" + content
+        image_prompt = self.text_generator.generate_text(image_meta_prompt, model="gpt-4o-mini")
+        return self.generate_image(image_prompt, output_filepath, size=size, quality=quality, model=model)
+
 
 class SimpleTTSGenerator:
     voices = [
