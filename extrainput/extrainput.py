@@ -418,6 +418,8 @@ class TTSWithSubsGenerator:
                                 }
                                 timestamps.append(word_info)
                         
+                        # print(timestamps)
+                        
                         self._save_srt_file(timestamps, srt_output_filepath)
                     else:
                         print("Warning: Word boundaries not available. Creating default subtitle.")
@@ -469,7 +471,7 @@ class TTSWithSubsGenerator:
             curr_group.append(timestamps[i])
             
             # Check if current word is a punctuation that should trigger a split
-            if timestamps[i]["text"] in chinese_punctuation:
+            if any(char in chinese_punctuation for char in timestamps[i]["text"]):
                 # Skip any consecutive punctuation marks (they should all stay in the same subtitle)
                 while (i+1 < len(timestamps)) and (timestamps[i+1]["text"] in chinese_punctuation):
                     i += 1

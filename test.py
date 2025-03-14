@@ -20,7 +20,7 @@ TEST_CONFIG = {
     'text_generator': False,     # Test TextGenerator
     'simple_tts': False,         # Test SimpleTTSGenerator
     'tts_with_subs': False,      # Test TTSWithSubsGenerator
-    'example_listener': True,   # Test ExampleSentenceListenerGenerator
+    'example_listener': False,   # Test ExampleSentenceListenerGenerator
     'image_generator': False,    # Test ImageGenerator
     'video_generator': False,    # Test VideoGenerator
     'example_content': False     # Test ExampleContentGenerator
