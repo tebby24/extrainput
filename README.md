@@ -1,5 +1,5 @@
 # ExtraInput
-A Python package for generating language learning audio content using AI text generation and speech synthesis.
+A Python package for generating Mandarin Chinese language learning audio content using AI text generation and speech synthesis.
 
 ## Installation
 

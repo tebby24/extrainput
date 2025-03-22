@@ -1,40 +1,46 @@
-import random
-from pydub import AudioSegment
 from openai import OpenAI
 from azure.cognitiveservices.speech import SpeechConfig, SpeechSynthesizer, AudioConfig, ResultReason, CancellationReason
-import concurrent.futures
-from typing import List, Tuple
-import srt
-from datetime import timedelta
+import json
 import os
 import requests
-import json
-import time
 import uuid
 import zipfile
 import tempfile
+import time
+from datetime import timedelta
+import srt
 from moviepy import AudioFileClip, ImageClip
+from typing import List
 
-class TextGenerator:
-    def __init__(self, openai_api_key):
-        """Initialize text generator with API key for OpenAI.
+class ExtraInputGenerator:
+    voices = [
+        {"name": "zh-CN-YunxiaNeural", "description": "Male - Child"},
+        {"name": "zh-CN-XiaoshuangNeural", "description": "Female - Child"},
+        {"name": "zh-CN-YunxiNeural", "description": "Male - Young Adult"},
+        {"name": "zh-CN-XiaoxiaoNeural", "description": "Female - Young Adult"},
+        {"name": "zh-CN-YunjianNeural", "description": "Male - Adult"},
+        {"name": "zh-CN-XiaorouNeural", "description": "Female - Adult"},
+        {"name": "zh-CN-YunyeNeural", "description": "Male - Senior"},
+        {"name": "zh-CN-XiaoqiuNeural", "description": "Female - Senior"},
+    ]
+
+    def __init__(self, openai_api_key, azure_speech_key, azure_speech_region):
+        """Initialize the ExtraInputGenerator with required API keys.
         
         Args:
-            openai_api_key (str): API key for OpenAI models (required)
+            openai_api_key (str): API key for OpenAI models
+            azure_speech_key (str): API key for Azure Speech services
+            azure_speech_region (str): Region for Azure Speech services
         """
         if not openai_api_key:
             raise ValueError("OpenAI API key is required")
-            
+        
         self.openai_client = OpenAI(api_key=openai_api_key)
-
-    def get_models(self):
-        """
-        Retrieves a tuple of available model names.
-
-        Returns:
-            tuple: A tuple containing the names of the available models.
-        """
-        return ("gpt-4o-mini", "gpt-4o")
+        self.speech_key = azure_speech_key
+        self.speech_region = azure_speech_region
+        self.speech_config = SpeechConfig(subscription=azure_speech_key, region=azure_speech_region)
+        self.speech_endpoint = f"https://{self.speech_region}.api.cognitive.microsoft.com"
+        self.api_version = "2024-04-01"
 
     def generate_text(self, prompt, model="gpt-4o-mini", json_mode=False):
         """Generate text based on a prompt using the specified model.
@@ -63,40 +69,27 @@ class TextGenerator:
                 stream=False
             )
             return response.choices[0].message.content
-            
         else:
             raise ValueError(f"Unsupported model: {model}. Supported models: gpt-4o-mini, gpt-4o")
 
-class ImageGenerator:
-    def __init__(self, openai_api_key):
-        """
-        Initialize the ImageGenerator with the OpenAI API key.
+    def generate_image(self, content, output_filepath, size="1792x1024", quality="standard"):
+        """Generate an image representing the given content using DALL-E 3.
 
         Args:
-            openai_api_key (str): The OpenAI API key for accessing DALL-E and GPT models.
-        """
-        self.client = OpenAI(api_key=openai_api_key)
-        self.text_generator = TextGenerator(openai_api_key=openai_api_key)
-    
-    def generate_image(self, prompt, output_filepath, size="1792x1024", quality="standard", model="dall-e-3"):
-        """
-        Generate an image using DALL-E 3 based on the provided prompt.
-
-        Args:
-            prompt (str): The description of the image to generate.
-            output_filepath (str): The file path where the generated image will be saved.
-            size (str, optional): The size of the image. Defaults to "1792x1024".
-            quality (str, optional): The quality of the image. Defaults to "standard".
-            model (str, optional): The DALL-E model version to use. Defaults to "dall-e-3".
+            content (str): The content or description for the image generation
+            output_filepath (str): The file path where the generated image will be saved
+            size (str, optional): The size of the image. Defaults to "1792x1024"
+            quality (str, optional): The quality of the image. Defaults to "standard"
 
         Returns:
-            str: The file path to the saved image.
+            str: The file path to the saved image
         """
-        enhanced_prompt = f"{prompt} (landscape orientation, wide format, horizontal composition)"
+        # Enhance the prompt for better results
+        enhanced_prompt = f"{content} (landscape orientation, wide format, horizontal composition)"
         
         try:
-            response = self.client.images.generate(
-                model=model,
+            response = self.openai_client.images.generate(
+                model="dall-e-3",
                 prompt=enhanced_prompt,
                 size=size,
                 quality=quality,
@@ -114,41 +107,17 @@ class ImageGenerator:
             print(f"Error generating image: {str(e)}")
             return None
 
-    def generate_image_representing_content(self, content, output_filepath, size="1792x1024", quality="standard", model="dall-e-3"):
-        """
-        Generate an image representing the given content using DALL-E 3.
-
-        Args:
-            content (str): The content or story to be represented in the image.
-            output_filepath (str): The file path where the generated image will be saved.
-            size (str, optional): The size of the image. Defaults to "1792x1024".
-            quality (str, optional): The quality of the image. Defaults to "standard".
-            model (str, optional): The DALL-E model version to use. Defaults to "dall-e-3".
-
-        Returns:
-            str: The file path to the saved image.
-        """
-        image_meta_prompt = "请编写 Dall-E 3 提示语，用于生成一个图像来表现下面的故事。只提供提示，不提供其他文字。:\n\n" + content
-        image_prompt = self.text_generator.generate_text(image_meta_prompt, model="gpt-4o-mini")
-        return self.generate_image(image_prompt, output_filepath, size=size, quality=quality, model=model)
-
-
-class SimpleTTSGenerator:
-    voices = [
-        {"name": "zh-CN-YunxiaNeural", "description": "Male - Child"},
-        {"name": "zh-CN-XiaoshuangNeural", "description": "Female - Child"},
-        {"name": "zh-CN-YunxiNeural", "description": "Male - Young Adult"},
-        {"name": "zh-CN-XiaoxiaoNeural", "description": "Female - Young Adult"},
-        {"name": "zh-CN-YunjianNeural", "description": "Male - Adult"},
-        {"name": "zh-CN-XiaorouNeural", "description": "Female - Adult"},
-        {"name": "zh-CN-YunyeNeural", "description": "Male - Senior"},
-        {"name": "zh-CN-XiaoqiuNeural", "description": "Female - Senior"},
-    ]
-
-    def __init__(self, azure_speech_key, azure_speech_region):
-        self.speech_config = SpeechConfig(subscription=azure_speech_key, region=azure_speech_region)
-
     def synthesize_speech(self, text, voice, output_filepath):
+        """Generate speech from text using Azure Speech Services.
+        
+        Args:
+            text (str): The text to synthesize to speech
+            voice (str): The voice name to use
+            output_filepath (str): Path to save the audio output
+            
+        Returns:
+            str: The path to the saved audio file if successful, None otherwise
+        """
         self.speech_config.speech_synthesis_voice_name = voice
         audio_config = AudioConfig(filename=output_filepath)
         synthesizer = SpeechSynthesizer(speech_config=self.speech_config, audio_config=audio_config)
@@ -159,134 +128,16 @@ class SimpleTTSGenerator:
             print(f"Speech synthesis canceled: {cancellation_details.reason}")
             if cancellation_details.reason == CancellationReason.Error:
                 print(f"Error details: {cancellation_details.error_details}")
+            return None
         elif result.reason == ResultReason.SynthesizingAudioCompleted:
             with open(output_filepath, "wb") as audio_file:
                 audio_file.write(result.audio_data)
-                return output_filepath
-            print(f"Speech synthesized for text [{text}] and saved to [{output_filepath}]")
-
-
-class ExampleSentenceListenerGenerator:
-    def __init__(self, openai_api_key, azure_speech_key, azure_speech_region):
-        self.text_generator = TextGenerator(openai_api_key=openai_api_key)
-        self.tts_engine = SimpleTTSGenerator(azure_speech_key, azure_speech_region)
-    
-    def get_example_sentences(self, word, num_sentences=3):
-        prompt = f"""请用中文词语'{word}'造{num_sentences}个例句。
-    要求：
-    1. 每个例句单独成行
-    2. 不要包含编号
-    3. 不要有任何解释，只需要例句
-    4. 例句应该简单且实用"""
-        
-        generated_text = self.text_generator.generate_text(prompt)
-        return [line.strip() for line in generated_text.split('\n') if line.strip()]
-
-    def get_translation(self, word):
-        prompt = f"请你把'{word}'这个词翻译成英文，只需要提供英文翻译，不要包含其他内容。"
-        return self.text_generator.generate_text(prompt)
-
-    def get_random_voice(self, exclude="none"):
-        voice = ""
-        while (voice == "" or voice == exclude):
-            voice = random.choice(SimpleTTSGenerator.voices)["name"]
-        return voice
-
-    def generate_example_sentence_listener(self, words, output_filepath):
-        print("Starting to generate example sentence listener...")
-
-        # Functions to get data for a single word
-        def get_word_data(word) -> Tuple[str, List[str]]:
-            print(f"Fetching data for word: {word}")
-            translation = self.get_translation(word)
-            example_sentences = self.get_example_sentences(word)
-            return translation, example_sentences
-
-        # Use ThreadPoolExecutor to fetch data in parallel
-        word_data_map = {}
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            # Submit all tasks and store future objects
-            future_to_word = {executor.submit(get_word_data, word): word for word in words}
-            
-            # Process completed tasks as they finish
-            for future in concurrent.futures.as_completed(future_to_word):
-                word = future_to_word[future]
-                try:
-                    translation, example_sentences = future.result()
-                    word_data_map[word] = (translation, example_sentences)
-                    print(f"Data fetched for word: {word}")
-                except Exception as e:
-                    print(f"Error processing word '{word}': {e}")
-        
-        # Generate audio files after all data is fetched
-        audios = []
-        for word in words:
-            if word not in word_data_map:
-                continue
-                
-            translation, example_sentences = word_data_map[word]
-            
-            # Ensure the directory exists
-            os.makedirs("bin/tmp", exist_ok=True)
-            print(f"Generating audio for word: {word}")
-            audios.append(self.tts_engine.synthesize_speech(word, self.get_random_voice(), f"bin/tmp/{word}_word.wav"))
-            audios.append(self.tts_engine.synthesize_speech(translation, self.get_random_voice(), f"bin/tmp/{word}_translation.wav"))
-
-            for index, sentence in enumerate(example_sentences):
-                voice_1 = self.get_random_voice()
-                voice_2 = self.get_random_voice(exclude=voice_1)
-                print(f"Generating audio for sentence {index+1} of word: {word}")
-                audios.append(self.tts_engine.synthesize_speech(
-                    sentence, 
-                    voice_1, 
-                    f"bin/tmp/{word}_sentence_{index+1}_a.wav"
-                ))
-                audios.append(self.tts_engine.synthesize_speech(
-                    sentence, 
-                    voice_2, 
-                    f"bin/tmp/{word}_sentence_{index+1}_b.wav"
-                ))
-
-        print("Combining audio segments...")
-        combined_audio = AudioSegment.silent(duration=200)
-        for audio_path in audios:
-            if ('_word' in audio_path):
-                combined_audio += AudioSegment.silent(duration=1000) # 1 second of silence between each word subgroup
-            audio_segment = AudioSegment.from_wav(audio_path)
-            combined_audio += audio_segment + AudioSegment.silent(duration=500)  # 0.5 second of silence between segments
-
-        print(f"Exporting combined audio to {output_filepath}")
-        combined_audio.export(output_filepath, format="wav")
-        print("Example sentence listener generation complete!")
-        return output_filepath
-
-
-
-class TTSWithSubsGenerator:
-    voices = [
-        {"name": "zh-CN-YunxiaNeural", "description": "Male - Child"},
-        {"name": "zh-CN-XiaoshuangNeural", "description": "Female - Child"},
-        {"name": "zh-CN-YunxiNeural", "description": "Male - Young Adult"},
-        {"name": "zh-CN-XiaoxiaoNeural", "description": "Female - Young Adult"},
-        {"name": "zh-CN-YunjianNeural", "description": "Male - Adult"},
-        {"name": "zh-CN-XiaorouNeural", "description": "Female - Adult"},
-        {"name": "zh-CN-YunyeNeural", "description": "Male - Senior"},
-        {"name": "zh-CN-XiaoqiuNeural", "description": "Female - Senior"},
-    ]
-
-    def __init__(self, azure_speech_key, azure_speech_region):
-        """Initialize the TTS generator with Azure credentials from environment variables."""
-        self.speech_key = azure_speech_key
-        self.speech_region = azure_speech_region
-        self.speech_endpoint = f"https://{self.speech_region}.api.cognitive.microsoft.com"
-        self.api_version = "2024-04-01"
-        
-        if not self.speech_key or not self.speech_region:
-            raise ValueError("Azure Speech credentials not found in environment variables")
+            print(f"Speech synthesized for text and saved to [{output_filepath}]")
+            return output_filepath
+        return None
 
     def synthesize_speech_with_srt(self, text, voice, mp3_output_filepath, srt_output_filepath):
-        """
-        Generate speech from text and create a synchronized subtitle file.
+        """Generate speech from text and create a synchronized subtitle file.
         
         Args:
             text (str): The text to synthesize
@@ -418,8 +269,6 @@ class TTSWithSubsGenerator:
                                 }
                                 timestamps.append(word_info)
                         
-                        # print(timestamps)
-                        
                         self._save_srt_file(timestamps, srt_output_filepath)
                     else:
                         print("Warning: Word boundaries not available. Creating default subtitle.")
@@ -513,29 +362,6 @@ class TTSWithSubsGenerator:
         with open(filename, "w", encoding="utf-8") as srt_file:
             srt_file.write(srt_content)
 
-class VideoGenerator:
-    def generate_video(self, image_filepath, mp3_filepath, mp4_output_filepath):
-        """
-        Generates a video by combining an image and an audio file.
-
-        Args:
-            image_filepath (str): The file path to the image to be used in the video.
-            mp3_filepath (str): The file path to the MP3 audio file to be used in the video.
-            mp4_output_filepath (str): The file path where the generated MP4 video will be saved.
-
-        Returns:
-            None
-        """
-        audio = AudioFileClip(mp3_filepath)
-        clip = ImageClip(image_filepath).with_duration(audio.duration)
-        clip = clip.with_audio(audio)
-        clip.write_videofile(mp4_output_filepath, fps=24)
-
-
-class ExampleContentGenerator:
-    def __init__(self, openai_api_key):
-        self.text_generator = TextGenerator(openai_api_key=openai_api_key)
-    
     def create_word_groups(self, words, group_min_size, group_max_size):
         """
         Groups a list of words into smaller lists based on specified size constraints.
@@ -574,7 +400,7 @@ Now, here is the actual list of words you should process:
 """
 
         # Get response with json_mode=False
-        response = self.text_generator.generate_text(prompt, model="gpt-4o", json_mode=False)
+        response = self.generate_text(prompt, model="gpt-4o", json_mode=False)
         
         # Clean up the response to extract just the JSON part
         cleaned_response = response.strip()
@@ -610,51 +436,20 @@ Now, here is the actual list of words you should process:
             # Return empty list as fallback
             return []
 
-    def generate_example_content(self, words):
+    def pair_voice_to_article(self, content, voices=None):
         """
-        Generates a Chinese article based on a given list of words.
-        This method takes a list of words and creates a prompt to generate a Chinese article
-        that uses each word at least once. The article can be in various forms such as a story,
-        essay, news report, poem, dialogue, or argumentative essay. The generated text should
-        be fluent, natural, and conform to Chinese expression habits.
-        Args:
-            words (list): A list of words to be included in the generated article.
-        Returns:
-            str: The generated Chinese article as a string.
-        """
-        words_formatted_as_list = json.dumps(words, ensure_ascii=False)
-         
-        prompt = f"""
-请根据以下给定的词语创作一篇中文文章，要求如下：
- - 必须使用每个词语至少一次，但可以自然地分布在文章中。
- - 自由选择文体，但请采用轻松、日常的风格，例如聊天记录、随笔、或日记等。
- - 使用简单易懂的语言，避免使用过于复杂或文学性的词汇，保持句子简洁明了。
- - 适当扩展内容，让文章完整且生动有趣，不要仅仅是简单的词组拼接。
- - 确保文章自然流畅，符合汉语表达习惯，使其便于阅读和理解。
-词语列表：
-{words_formatted_as_list}
-
-请用轻松自然、可读性强的中文写作，不要额外解释，只输出完整的创作文本。
-"""
-
-        response = self.text_generator.generate_text(prompt, model="gpt-4o", json_mode=False)
-        return response
-
-    def pair_voice_to_content(self, content, voices):
-        """
-        Determines the most suitable voice from a list of available voices to narrate given content.
-        
-        Uses AI to analyze the content's tone, style, and context to select an appropriate voice
-        that would be the most natural fit for narrating the text.
+        Determines the most suitable voice from the available voices to narrate given content.
         
         Args:
             content (str): The Chinese text content that needs narration
-            voices (list): A list of dictionaries containing voice information with format:
-                           [{"name": "voicename", "description": "voice_description"}, ...]
+            voices (list, optional): A list of dictionaries containing voice information.
+                                     If None, uses the default voices list.
         
         Returns:
             str: The name of the selected voice that best matches the content
         """
+        if voices is None:
+            voices = self.voices
 
         voices_as_json = json.dumps(voices, ensure_ascii=False)
         prompt = f"""
@@ -662,7 +457,7 @@ I have a piece of Chinese writing and I plan to use text to speech to synthasize
 For example, if it sounds like the narrirator of the content is a little girl, respond with the name of the voice who's description describes a little girl. If the content seems like a news broadcast, maybe choose the voice who's description matches an older man. 
 Here are the voice names and their descriptions:
 ```json
-{voices}
+{voices_as_json}
 ```
 
 Here is my Chinese writing:
@@ -676,5 +471,24 @@ Response requirements:
 - the voice must match one of the names of the voices provided
 """
 
-        response = self.text_generator.generate_text(prompt, model="gpt-4o-mini", json_mode=False)
-        return response
+        response = self.generate_text(prompt, model="gpt-4o-mini", json_mode=False)
+        return response.strip()
+
+    def generate_video(self, image_filepath, mp3_filepath, mp4_output_filepath):
+        """
+        Generates a video by combining an image and an audio file.
+
+        Args:
+            image_filepath (str): The file path to the image to be used in the video.
+            mp3_filepath (str): The file path to the MP3 audio file to be used in the video.
+            mp4_output_filepath (str): The file path where the generated MP4 video will be saved.
+
+        Returns:
+            str: The path to the generated video file
+        """
+        audio = AudioFileClip(mp3_filepath)
+        clip = ImageClip(image_filepath).with_duration(audio.duration)
+        clip = clip.with_audio(audio)
+        clip.write_videofile(mp4_output_filepath, fps=24)
+        return mp4_output_filepath
+
