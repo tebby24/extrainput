@@ -85,7 +85,7 @@ class ExtraInputGenerator:
         """
         try:
             response = requests.post(
-                "https://api.stability.ai/v2beta/stable-image/generate/core",
+                "https://api.stability.ai/v2beta/stable-image/generate/ultra",
                 headers={
                     "authorization": f"Bearer {self.stabilityai_api_key}",
                     "accept": "image/*"
