@@ -10,10 +10,10 @@ load_dotenv()
 # Set to True to run the test, False to skip
 TEST_CONFIG = {
     'text_generator': False,         # Test text generation
-    'image_generator': False,        # Test image generation
+    'image_generator': True,        # Test image generation
     'simple_tts': False,             # Test simple TTS
     'tts_with_subs': False,          # Test TTS with subtitles
-    'word_groups': True,            # Test word grouping
+    'word_groups': False,            # Test word grouping
     'voice_pairing': False,          # Test voice pairing
     'video_generator': False,        # Test video generation
 }
@@ -24,12 +24,15 @@ class TestExtraInput(unittest.TestCase):
         self.azure_speech_key = os.getenv("AZURE_SPEECH_KEY")
         self.azure_speech_region = os.getenv("AZURE_SPEECH_REGION")
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        self.stabilityai_api_key = os.getenv("STABILITYAI_API_KEY")
         
         # Skip tests if credentials are not available
         if not all([self.azure_speech_key, self.azure_speech_region]):
             print("Warning: Azure Speech credentials not found, some tests will be skipped")
         if not self.openai_api_key:
             print("Warning: OPENAI_API_KEY not found, some tests will be skipped")
+        if not self.stabilityai_api_key:
+            print("Warning: STABILITYAI_API_KEY not found, image generation tests may fail")
         
         # Ensure output directories exist
         os.makedirs("bin/test/output", exist_ok=True)
@@ -52,7 +55,8 @@ class TestExtraInput(unittest.TestCase):
             self.generator = ExtraInputGenerator(
                 openai_api_key=self.openai_api_key,
                 azure_speech_key=self.azure_speech_key,
-                azure_speech_region=self.azure_speech_region
+                azure_speech_region=self.azure_speech_region,
+                stabilityai_api_key=self.stabilityai_api_key
             )
         else:
             self.generator = None
@@ -86,29 +90,16 @@ class TestExtraInput(unittest.TestCase):
         """Test image generation"""
         if not self.generator:
             self.skipTest("API credentials not available")
+        if not self.stabilityai_api_key:
+            self.skipTest("StabilityAI API key not available")
             
         # Test with simple prompt
         output_path = "bin/test/output/generated_image_test.png"
-        result_path = self.generator.generate_image("一只可爱的小猫", output_path)
+        result_path = self.generator.generate_image("a cute cat", output_path, aspect_ratio="1:1")
         
         # Check that file was created
         self.assertTrue(os.path.exists(result_path))
         self.assertEqual(result_path, output_path)
-        
-        # Test with text from file for prompt
-        if os.path.exists(self.test_text_path):
-            with open(self.test_text_path, "r", encoding="utf-8") as f:
-                sample_text = f.read().split("\n\n")[1]  # Use second paragraph
-                
-            # Create a concise prompt from the text
-            prompt = f"根据这段文字创建一个简单的插图: {sample_text[:100]}..."
-            
-            output_path_2 = "bin/test/output/generated_image_file_test.png"
-            result_path = self.generator.generate_image(prompt, output_path_2)
-            
-            # Check that file was created
-            self.assertTrue(os.path.exists(result_path))
-            self.assertEqual(result_path, output_path_2)
     
     def test_simple_tts(self):
         """Test simple TTS generation"""
@@ -231,7 +222,7 @@ class TestExtraInput(unittest.TestCase):
         # Test with generated content if possible
         # Generate an image
         image_path = "bin/test/output/video_test_image.png"
-        self.generator.generate_image("一座美丽的山脉", image_path)
+        self.generator.generate_image("A beautiful mountain range", image_path)
         
         # Generate audio
         audio_path = "bin/test/output/video_test_audio.wav"

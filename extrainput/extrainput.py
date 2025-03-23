@@ -24,7 +24,7 @@ class ExtraInputGenerator:
         {"name": "zh-CN-XiaoqiuNeural", "description": "Female - Senior"},
     ]
 
-    def __init__(self, openai_api_key, azure_speech_key, azure_speech_region):
+    def __init__(self, openai_api_key, azure_speech_key, azure_speech_region, stabilityai_api_key):
         """Initialize the ExtraInputGenerator with required API keys.
         
         Args:
@@ -41,6 +41,7 @@ class ExtraInputGenerator:
         self.speech_config = SpeechConfig(subscription=azure_speech_key, region=azure_speech_region)
         self.speech_endpoint = f"https://{self.speech_region}.api.cognitive.microsoft.com"
         self.api_version = "2024-04-01"
+        self.stabilityai_api_key = stabilityai_api_key
 
     def generate_text(self, prompt, model="gpt-4o-mini"):
         """Generate text based on a prompt using the specified model.
@@ -70,37 +71,42 @@ class ExtraInputGenerator:
         else:
             raise ValueError(f"Unsupported model: {model}. Supported models: gpt-4o-mini, gpt-4o")
 
-    def generate_image(self, content, output_filepath, size="1792x1024", quality="standard"):
-        """Generate an image representing the given content using DALL-E 3.
+    def generate_image(self, prompt, output_filepath, aspect_ratio="16:9", output_format="png"):
+        """Generate an image based on a prompt using stability AI.
 
         Args:
             content (str): The content or description for the image generation
             output_filepath (str): The file path where the generated image will be saved
-            size (str, optional): The size of the image. Defaults to "1792x1024"
-            quality (str, optional): The quality of the image. Defaults to "standard"
+            aspect_ratio (str, optional): The aspect ratio of the image. Defaults to "1:1"
+            output_format (str, optional): The format of the output image. Defaults to "png"
 
         Returns:
-            str: The file path to the saved image
+            str: The file path to the saved image or None if generation failed
         """
-        # Enhance the prompt for better results
-        enhanced_prompt = f"{content} (landscape orientation, wide format, horizontal composition)"
-        
         try:
-            response = self.openai_client.images.generate(
-                model="dall-e-3",
-                prompt=enhanced_prompt,
-                size=size,
-                quality=quality,
-                n=1
+            response = requests.post(
+                "https://api.stability.ai/v2beta/stable-image/generate/core",
+                headers={
+                    "authorization": f"Bearer {self.stabilityai_api_key}",
+                    "accept": "image/*"
+                },
+                files={"none": ''},
+                data={
+                    "prompt": prompt,
+                    "aspect_ratio": aspect_ratio,
+                    "output_format": output_format,
+                },
             )
-            
-            image_url = response.data[0].url
-            
-            image_data = requests.get(image_url).content
-            with open(output_filepath, 'wb') as image_file:
-                image_file.write(image_data)
-            return output_filepath
-            
+
+            if response.status_code == 200:
+                with open(output_filepath, 'wb') as file:
+                    file.write(response.content)
+                return output_filepath
+            else:
+                error_info = str(response.json() if response.headers.get('content-type') == 'application/json' else response.text)
+                print(f"Error generating image: Status code {response.status_code} - {error_info}")
+                return None
+                
         except Exception as e:
             print(f"Error generating image: {str(e)}")
             return None
