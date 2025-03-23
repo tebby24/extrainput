@@ -13,9 +13,9 @@ TEST_CONFIG = {
     'image_generator': False,        # Test image generation
     'simple_tts': False,             # Test simple TTS
     'tts_with_subs': False,          # Test TTS with subtitles
-    'word_groups': False,            # Test word grouping
+    'word_groups': True,            # Test word grouping
     'voice_pairing': False,          # Test voice pairing
-    'video_generator': True,        # Test video generation
+    'video_generator': False,        # Test video generation
 }
 
 class TestExtraInput(unittest.TestCase):
@@ -81,19 +81,6 @@ class TestExtraInput(unittest.TestCase):
             result = self.generator.generate_text(prompt)
             self.assertTrue(result and isinstance(result, str))
             print(f"Generated text based on input file: {result}")
-        
-        # Test JSON mode
-        result = self.generator.generate_text(
-            "Generate a JSON object with keys 'word' and 'translation' for the word '你好'", 
-            model="gpt-4o-mini", 
-            json_mode=True
-        )
-        self.assertTrue(result and isinstance(result, str))
-        # Check if result is valid JSON
-        import json
-        json_result = json.loads(result)
-        self.assertTrue(isinstance(json_result, dict))
-        print(f"Generated JSON: {json_result}")
     
     def test_image_generator(self):
         """Test image generation"""
@@ -185,7 +172,13 @@ class TestExtraInput(unittest.TestCase):
             self.skipTest("API credentials not available")
             
         # Test with sample words
-        words = ["苹果", "香蕉", "樱桃", "狗", "猫", "大象", "吉他", "钢琴", "小提琴", "河流", "海洋", "湖泊"]
+        words = [
+            "你好", "再见", "谢谢", "不客气", "是", "不是", "什么", "谁",
+            "哪里", "为什么", "多少", "时间", "今天", "明天", "昨天", "早上",
+            "晚上", "中午", "吃饭", "喝水", "工作", "学习", "睡觉", "朋友",
+            "家人", "爱", "喜欢", "不喜欢", "电脑", "手机", "书", "笔",
+            "桌子", "椅子", "房子", "车", "钱", "名字", "国家", "城市"
+        ]
         grouped_words = self.generator.create_word_groups(words, group_min_size=3, group_max_size=5)
         
         # Check that we got a list of groups

@@ -42,7 +42,7 @@ class ExtraInputGenerator:
         self.speech_endpoint = f"https://{self.speech_region}.api.cognitive.microsoft.com"
         self.api_version = "2024-04-01"
 
-    def generate_text(self, prompt, model="gpt-4o-mini", json_mode=False):
+    def generate_text(self, prompt, model="gpt-4o-mini"):
         """Generate text based on a prompt using the specified model.
         
         Args:
@@ -50,7 +50,6 @@ class ExtraInputGenerator:
             model (str, optional): Model to use. Options: 
                 - "gpt-4o-mini" (default)
                 - "gpt-4o"
-            json_mode (bool, optional): If True, instructs the model to return JSON.
                 
         Returns:
             str: Generated text response
@@ -65,7 +64,6 @@ class ExtraInputGenerator:
                     {"role": "system", "content": "You are a helpful assistant"},
                     {"role": "user", "content": prompt},
                 ],
-                response_format={"type": "json_object"} if json_mode else None,
                 stream=False
             )
             return response.choices[0].message.content
@@ -378,29 +376,29 @@ class ExtraInputGenerator:
         print(f"Input words: {words_formatted_as_list}")
 
         prompt = f"""
-You will be given a list of words. Your task is to group these words into lists, ensuring that:
-- Each group contains between {group_min_size} and {group_max_size} words.
-- Words in each group should be related and likely to appear together in the same paragraph.
-- Return ONLY a valid JSON list of lists, with no explanations or markdown formatting.
-- Do not include backticks, json tags, or any other text besides the actual JSON array.
+        You will be given a list of words. Your task is to group these words into lists, ensuring that:
+        - Each group contains between {group_min_size} and {group_max_size} words.
+        - Words in each group should be related and likely to appear together in the same paragraph.
+        - Return ONLY a valid JSON list of lists, with no explanations or markdown formatting.
+        - Do not include backticks, json tags, or any other text besides the actual JSON array.
 
-Example input:
-["苹果", "香蕉", "樱桃", "狗", "猫", "大象", "吉他", "钢琴", "小提琴", "河流", "海洋", "湖泊"]
+        Example input:
+        ["苹果", "香蕉", "樱桃", "狗", "猫", "大象", "吉他", "钢琴", "小提琴", "河流", "海洋", "湖泊"]
 
-Example output format (but adjusted to your group size requirements):
-[
-    ["苹果", "香蕉", "樱桃", "梨"],
-    ["狗", "猫", "大象", "老虎"],
-    ["吉他", "钢琴", "小提琴", "萨克斯", "架子鼓"],
-    ["河流", "海洋", "湖泊", "池塘"]
-]
+        Example output format (but adjusted to your group size requirements):
+        [
+            ["苹果", "香蕉", "樱桃", "梨"],
+            ["狗", "猫", "大象", "老虎"],
+            ["吉他", "钢琴", "小提琴", "萨克斯", "架子鼓"],
+            ["河流", "海洋", "湖泊", "池塘"]
+        ]
 
-Now, here is the actual list of words you should process:
-{words_formatted_as_list}
-"""
+        Now, here is the actual list of words you should process:
+        {words_formatted_as_list}
+        """
 
         # Get response with json_mode=False
-        response = self.generate_text(prompt, model="gpt-4o", json_mode=False)
+        response = self.generate_text(prompt, model="gpt-4o")
         
         # Clean up the response to extract just the JSON part
         cleaned_response = response.strip()
@@ -417,19 +415,105 @@ Now, here is the actual list of words you should process:
         
         # Try to parse the JSON
         try:
-            result = json.loads(cleaned_response)
+            initial_groups = json.loads(cleaned_response)
             
             # Validate the structure - we expect a list of lists
-            if not isinstance(result, list):
-                print(f"Error: Expected a list but got {type(result).__name__}")
+            if not isinstance(initial_groups, list):
+                print(f"Error: Expected a list but got {type(initial_groups).__name__}")
                 return []
                 
-            for group in result:
+            for group in initial_groups:
                 if not isinstance(group, list):
                     print(f"Error: Expected each group to be a list but got {type(group).__name__}")
                     return []
+            
+            # Remove duplicates across groups (keep first occurrence)
+            seen_words = set()
+            cleaned_groups = []
+            
+            for group in initial_groups:
+                cleaned_group = []
+                for word in group:
+                    if word not in seen_words:
+                        seen_words.add(word)
+                        cleaned_group.append(word)
+                if cleaned_group:  # Only add non-empty groups
+                    cleaned_groups.append(cleaned_group)
+            
+            # Find unused words
+            unused_words = [word for word in words if word not in seen_words]
+            
+            # If there are unused words, ask the model to incorporate them
+            if unused_words:
+                print(f"Found {len(unused_words)} unused words. Asking model to incorporate them.")
+                
+                unused_formatted = json.dumps(unused_words, ensure_ascii=False)
+                groups_formatted = json.dumps(cleaned_groups, ensure_ascii=False)
+                
+                second_prompt = f"""
+                I have some word groups, but some words from my original list were not included. 
+                Please add these unused words to the existing groups where they fit best semantically.
+                
+                Current word groups:
+                {groups_formatted}
+                
+                Words to add:
+                {unused_formatted}
+                
+                Rules:
+                - Add each unused word to whichever existing group it fits best with semantically
+                - Don't worry about maintaining specific group sizes - focus on the best semantic fit
+                - Try to maintain the existing groupings as much as possible
+                - Return ONLY a valid JSON list of lists, with no explanations or markdown formatting
+                """
+                
+                response = self.generate_text(second_prompt, model="gpt-4o")
+                
+                # Clean and parse the second response
+                cleaned_response = response.strip()
+                
+                # Remove code block markers if present
+                if cleaned_response.startswith("```") and cleaned_response.endswith("```"):
+                    cleaned_response = cleaned_response[3:-3].strip()
+                
+                # Remove json language specifier if present
+                if cleaned_response.startswith("```json"):
+                    cleaned_response = cleaned_response[7:].strip()
+                    if cleaned_response.endswith("```"):
+                        cleaned_response = cleaned_response[:-3].strip()
+                
+                try:
+                    final_groups = json.loads(cleaned_response)
                     
-            return result
+                    # Validate again
+                    if not isinstance(final_groups, list):
+                        print(f"Error in second response: Expected a list but got {type(final_groups).__name__}")
+                        return cleaned_groups  # Return the first result as fallback
+                    
+                    for group in final_groups:
+                        if not isinstance(group, list):
+                            print(f"Error in second response: Expected each group to be a list but got {type(group).__name__}")
+                            return cleaned_groups  # Return the first result as fallback
+                    
+                    # Check if all words are now included
+                    all_grouped_words = set()
+                    for group in final_groups:
+                        for word in group:
+                            all_grouped_words.add(word)
+                    
+                    missing_words = [word for word in words if word not in all_grouped_words]
+                    if missing_words:
+                        print(f"Warning: {len(missing_words)} words still not included after second attempt")
+                    
+                    return final_groups
+                    
+                except json.JSONDecodeError as e:
+                    print(f"JSON parsing error in second response: {e}")
+                    print(f"Failed to parse: {cleaned_response}")
+                    return cleaned_groups  # Return the first result as fallback
+            
+            return cleaned_groups
+                
         except json.JSONDecodeError as e:
             print(f"JSON parsing error: {e}")
             print(f"Failed to parse: {cleaned_response}")
@@ -453,25 +537,25 @@ Now, here is the actual list of words you should process:
 
         voices_as_json = json.dumps(voices, ensure_ascii=False)
         prompt = f"""
-I have a piece of Chinese writing and I plan to use text to speech to synthasize it into speech. Given a set of voices, descriptions of the voices, and my content, I want you to determine the most suitable voice to serve as the narrator for my writing. 
-For example, if it sounds like the narrirator of the content is a little girl, respond with the name of the voice who's description describes a little girl. If the content seems like a news broadcast, maybe choose the voice who's description matches an older man. 
-Here are the voice names and their descriptions:
-```json
-{voices_as_json}
-```
+        I have a piece of Chinese writing and I plan to use text to speech to synthasize it into speech. Given a set of voices, descriptions of the voices, and my content, I want you to determine the most suitable voice to serve as the narrator for my writing. 
+        For example, if it sounds like the narrirator of the content is a little girl, respond with the name of the voice who's description describes a little girl. If the content seems like a news broadcast, maybe choose the voice who's description matches an older man. 
+        Here are the voice names and their descriptions:
+        ```json
+        {voices_as_json}
+        ```
 
-Here is my Chinese writing:
-```text
-{content}
-```
-Which voice would be best to narrate my content? 
-Response requirements:
-- write only the name of the voice and nothing else
-- do NOT provide any formatting such as quotes or brackets
-- the voice must match one of the names of the voices provided
-"""
+        Here is my Chinese writing:
+        ```text
+        {content}
+        ```
+        Which voice would be best to narrate my content? 
+        Response requirements:
+        - write only the name of the voice and nothing else
+        - do NOT provide any formatting such as quotes or brackets
+        - the voice must match one of the names of the voices provided
+        """
 
-        response = self.generate_text(prompt, model="gpt-4o-mini", json_mode=False)
+        response = self.generate_text(prompt, model="gpt-4o-mini")
         return response.strip()
 
     def generate_video(self, image_filepath, mp3_filepath, mp4_output_filepath):
