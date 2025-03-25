@@ -11,6 +11,11 @@ from datetime import timedelta
 import srt
 from moviepy import AudioFileClip, ImageClip
 from typing import List
+import numpy as np
+import fasttext
+import fasttext.util
+from sklearn.cluster import KMeans
+from sklearn.metrics.pairwise import cosine_similarity
 
 class ExtraInputGenerator:
     voices = [
@@ -381,7 +386,7 @@ class ExtraInputGenerator:
 
     def create_word_groups(self, words, group_min_size, group_max_size):
         """
-        Groups a list of words into smaller lists based on specified size constraints.
+        Groups a list of words into smaller lists based on semantic similarity using fastText embeddings.
 
         Args:
             words (list): The list of words to be grouped.
@@ -389,8 +394,148 @@ class ExtraInputGenerator:
             group_max_size (int): The maximum number of words in each group.
 
         Returns:
-            list: A list of lists, where each sublist contains grouped words.
+            list: A list of lists, where each sublist contains semantically related words.
         """
+        # Calculate the target group size (average of min and max)
+        target_group_size = min(max(len(words) // 5, group_min_size), group_max_size)
+        
+        try:
+            # Create models directory if it doesn't exist
+            models_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
+            os.makedirs(models_dir, exist_ok=True)
+            
+            # Check if fastText model exists in models directory, if not download it
+            model_filename = "cc.zh.300.bin"
+            model_path = os.path.join(models_dir, model_filename)
+            
+            if not os.path.exists(model_path):
+                print("Downloading Chinese fastText model (this may take some time)...")
+                # Download to current directory first
+                downloaded_file = fasttext.util.download_model('zh', if_exists='ignore')
+                
+                if downloaded_file:
+                    # Move the file to our models directory
+                    if os.path.exists(downloaded_file):
+                        os.rename(downloaded_file, model_path)
+                        print(f"Moved model to {model_path}")
+                    # Check if we need to extract .gz file
+                    elif os.path.exists(f"{downloaded_file}.gz"):
+                        fasttext.util.gunzip(f"{downloaded_file}.gz")
+                        if os.path.exists(downloaded_file):
+                            os.rename(downloaded_file, model_path)
+                            print(f"Extracted and moved model to {model_path}")
+                
+                if not os.path.exists(model_path):
+                    raise FileNotFoundError(f"Failed to download and setup fastText model at {model_path}")
+            
+            # Load the model
+            print("Loading fastText model...")
+            model = fasttext.load_model(model_path)
+            
+            # Get word vectors
+            print(f"Getting word vectors for {len(words)} words...")
+            vectors = []
+            valid_words = []
+            for word in words:
+                try:
+                    vec = model.get_word_vector(word)
+                    vectors.append(vec)
+                    valid_words.append(word)
+                except Exception as e:
+                    print(f"Error getting vector for word '{word}': {str(e)}")
+            
+            if not valid_words:
+                print("No valid word vectors found, falling back to AI-based grouping")
+                return self._fallback_create_word_groups(words, group_min_size, group_max_size)
+            
+            print(f"Generated {len(vectors)} word vectors successfully")
+            vectors = np.array(vectors)
+            
+            # Compute the number of groups needed
+            num_groups = max(1, len(valid_words) // target_group_size)
+            
+            # Cluster words into semantically similar groups
+            if len(valid_words) <= target_group_size:
+                # If we have fewer words than the target size, return them as a single group
+                return [valid_words]
+            
+            # Calculate pairwise cosine similarities
+            similarity_matrix = cosine_similarity(vectors)
+            
+            # Group words using the greedy approach for equal-sized groups
+            unassigned_indices = set(range(len(valid_words)))
+            groups = []
+            
+            while len(unassigned_indices) >= group_min_size:
+                # Find the word with the highest average similarity to all unassigned words
+                best_start_idx = None
+                best_avg_similarity = -float('inf')
+                
+                for idx in unassigned_indices:
+                    unassigned_similarity = [similarity_matrix[idx][j] for j in unassigned_indices if j != idx]
+                    avg_similarity = np.mean(unassigned_similarity) if unassigned_similarity else 0
+                    if avg_similarity > best_avg_similarity:
+                        best_avg_similarity = avg_similarity
+                        best_start_idx = idx
+                
+                # Start a new group with this word
+                current_group_indices = [best_start_idx]
+                unassigned_indices.remove(best_start_idx)
+                
+                # Add words one by one until we reach the target group size
+                current_size = min(target_group_size, len(unassigned_indices) + 1)
+                while len(current_group_indices) < current_size and unassigned_indices:
+                    # Calculate average similarity of each unassigned word to current group
+                    best_idx = None
+                    best_avg_similarity = -float('inf')
+                    
+                    for idx in unassigned_indices:
+                        avg_similarity = np.mean([similarity_matrix[idx][group_idx] for group_idx in current_group_indices])
+                        if avg_similarity > best_avg_similarity:
+                            best_avg_similarity = avg_similarity
+                            best_idx = idx
+                    
+                    # Add the best word to the group
+                    current_group_indices.append(best_idx)
+                    unassigned_indices.remove(best_idx)
+                
+                # Add the current group to our results
+                current_group = [valid_words[idx] for idx in current_group_indices]
+                groups.append(current_group)
+            
+            # If there are any remaining words, add them as the final group
+            # or distribute them among existing groups
+            if unassigned_indices:
+                if len(unassigned_indices) >= group_min_size:
+                    final_group = [valid_words[idx] for idx in unassigned_indices]
+                    groups.append(final_group)
+                else:
+                    # Distribute remaining words to their most similar groups
+                    for idx in unassigned_indices:
+                        best_group_idx = -1
+                        best_similarity = -float('inf')
+                        
+                        for group_idx, group in enumerate(groups):
+                            group_word_indices = [valid_words.index(word) for word in group]
+                            avg_similarity = np.mean([similarity_matrix[idx][group_word_idx] for group_word_idx in group_word_indices])
+                            
+                            if avg_similarity > best_similarity:
+                                best_similarity = avg_similarity
+                                best_group_idx = group_idx
+                        
+                        if best_group_idx >= 0:
+                            groups[best_group_idx].append(valid_words[idx])
+            
+            print(f"Created {len(groups)} word groups using semantic clustering")
+            return groups
+            
+        except Exception as e:
+            print(f"Error in fastText grouping: {str(e)}")
+            print("Falling back to AI-based grouping method")
+            return self._fallback_create_word_groups(words, group_min_size, group_max_size)
+    
+    def _fallback_create_word_groups(self, words, group_min_size, group_max_size):
+        """Fallback method that uses AI-based grouping when fastText clustering fails."""
         words_formatted_as_list = json.dumps(words, ensure_ascii=False)
         print(f"Input words: {words_formatted_as_list}")
 
