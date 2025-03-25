@@ -362,7 +362,7 @@ class ExtraInputGenerator:
         # Handle the special case with closing dialogue characters (both English and Chinese)
         i = 1
         while i < len(subtitles):
-            if subtitles[i].content and (subtitles[i].content[0] == '"' or subtitles[i].content[0] == '”'):
+            if subtitles[i].content and subtitles[i].content[0] == '”':
                 # Move the closing quote to the end of the previous subtitle
                 subtitles[i-1].content += subtitles[i].content[0]
                 subtitles[i].content = subtitles[i].content[1:]
