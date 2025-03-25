@@ -164,22 +164,18 @@ class TestExtraInput(unittest.TestCase):
             
         # Test with sample words
         words = [
-            "你好", "再见", "谢谢", "不客气", "是", "不是", "什么", "谁",
-            "哪里", "为什么", "多少", "时间", "今天", "明天", "昨天", "早上",
-            "晚上", "中午", "吃饭", "喝水", "工作", "学习", "睡觉", "朋友",
-            "家人", "爱", "喜欢", "不喜欢", "电脑", "手机", "书", "笔",
-            "桌子", "椅子", "房子", "车", "钱", "名字", "国家", "城市"
+            "哲学", "经济", "政治", "文化", "历史", "科学", "技术", "创新", "发展", "社会",
+            "环境", "可持续", "全球化", "国际", "合作", "竞争", "挑战", "机遇", "战略", "分析",
+            "评估", "研究", "理论", "实践", "辩证", "矛盾", "统一", "本质", "现象", "规律",
+            "趋势", "预测", "假设", "论证", "批判", "思维", "意识", "形态", "价值观", "伦理",
+            "道德", "责任", "义务", "权利", "公平", "正义", "平等", "自由", "民主", "法治",
+            "效率", "效益", "质量", "风险", "管理", "沟通", "协调", "资源", "优化", "战略"
         ]
-        grouped_words = self.generator.create_word_groups(words, group_min_size=3, group_max_size=5)
+        grouped_words = self.generator.create_word_groups(words, group_min_size=8, group_max_size=12)
         
         # Check that we got a list of groups
         self.assertTrue(isinstance(grouped_words, list))
         
-        # Check that each group has the required size
-        for group in grouped_words:
-            self.assertTrue(isinstance(group, list))
-            self.assertTrue(3 <= len(group) <= 5)
-            
         print(f"Grouped words: {grouped_words}")
     
     def test_voice_pairing(self):

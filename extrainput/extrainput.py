@@ -564,126 +564,180 @@ class ExtraInputGenerator:
         # Get response with json_mode=False
         response = self.generate_text(prompt, model="deepseek/deepseek-r1:free")
         
-        # Clean up the response to extract just the JSON part
-        cleaned_response = response.strip()
+        # Clean response and parse initial groups
+        initial_groups = self._clean_and_parse_json_response(response)
+        if not initial_groups:
+            # If we failed to get valid groups, return a fallback with all words in one group
+            print("Failed to parse initial groups, falling back to simple grouping")
+            return [words]
+            
+        # Remove duplicates across groups (keep first occurrence)
+        seen_words = set()
+        cleaned_groups = []
         
-        # Remove code block markers if present
-        if cleaned_response.startswith("```") and cleaned_response.endswith("```"):
-            cleaned_response = cleaned_response[3:-3].strip()
+        for group in initial_groups:
+            cleaned_group = []
+            for word in group:
+                if word not in seen_words:
+                    seen_words.add(word)
+                    cleaned_group.append(word)
+            if cleaned_group:  # Only add non-empty groups
+                cleaned_groups.append(cleaned_group)
         
-        # Remove json language specifier if present
-        if cleaned_response.startswith("```json"):
-            cleaned_response = cleaned_response[7:].strip()
-            if cleaned_response.endswith("```"):
-                cleaned_response = cleaned_response[:-3].strip()
+        # Find unused words
+        unused_words = [word for word in words if word not in seen_words]
         
-        # Try to parse the JSON
-        try:
-            initial_groups = json.loads(cleaned_response)
+        # If there are unused words, ask the model to incorporate them
+        if unused_words:
+            print(f"Found {len(unused_words)} unused words. Asking model to incorporate them.")
             
-            # Validate the structure - we expect a list of lists
-            if not isinstance(initial_groups, list):
-                print(f"Error: Expected a list but got {type(initial_groups).__name__}")
-                return []
-                
-            for group in initial_groups:
-                if not isinstance(group, list):
-                    print(f"Error: Expected each group to be a list but got {type(group).__name__}")
-                    return []
+            unused_formatted = json.dumps(unused_words, ensure_ascii=False)
+            groups_formatted = json.dumps(cleaned_groups, ensure_ascii=False)
             
-            # Remove duplicates across groups (keep first occurrence)
-            seen_words = set()
-            cleaned_groups = []
+            second_prompt = f"""
+            I have some word groups, but some words from my original list were not included. 
+            Please add these unused words to the existing groups where they fit best semantically.
             
-            for group in initial_groups:
-                cleaned_group = []
-                for word in group:
-                    if word not in seen_words:
-                        seen_words.add(word)
-                        cleaned_group.append(word)
-                if cleaned_group:  # Only add non-empty groups
-                    cleaned_groups.append(cleaned_group)
+            IMPORTANT: Return ONLY a valid JSON array of arrays like this exact format:
+            [["word1", "word2"], ["word3", "word4"]]
             
-            # Find unused words
-            unused_words = [word for word in words if word not in seen_words]
+            Current word groups:
+            {groups_formatted}
             
-            # If there are unused words, ask the model to incorporate them
-            if unused_words:
-                print(f"Found {len(unused_words)} unused words. Asking model to incorporate them.")
-                
-                unused_formatted = json.dumps(unused_words, ensure_ascii=False)
-                groups_formatted = json.dumps(cleaned_groups, ensure_ascii=False)
-                
-                second_prompt = f"""
-                I have some word groups, but some words from my original list were not included. 
-                Please add these unused words to the existing groups where they fit best semantically.
-                
-                Current word groups:
-                {groups_formatted}
-                
-                Words to add:
-                {unused_formatted}
-                
-                Rules:
-                - Add each unused word to whichever existing group it fits best with semantically
-                - Don't worry about maintaining specific group sizes - focus on the best semantic fit
-                - Try to maintain the existing groupings as much as possible
-                - Return ONLY a valid JSON list of lists, with no explanations or markdown formatting
-                """
-                
-                response = self.generate_text(second_prompt, model="deepseek/deepseek-r1:free")
-                
-                # Clean and parse the second response
-                cleaned_response = response.strip()
-                
-                # Remove code block markers if present
-                if cleaned_response.startswith("```") and cleaned_response.endswith("```"):
-                    cleaned_response = cleaned_response[3:-3].strip()
-                
-                # Remove json language specifier if present
-                if cleaned_response.startswith("```json"):
-                    cleaned_response = cleaned_response[7:].strip()
-                    if cleaned_response.endswith("```"):
-                        cleaned_response = cleaned_response[:-3].strip()
-                
-                try:
-                    final_groups = json.loads(cleaned_response)
-                    
-                    # Validate again
-                    if not isinstance(final_groups, list):
-                        print(f"Error in second response: Expected a list but got {type(final_groups).__name__}")
-                        return cleaned_groups  # Return the first result as fallback
-                    
-                    for group in final_groups:
-                        if not isinstance(group, list):
-                            print(f"Error in second response: Expected each group to be a list but got {type(group).__name__}")
-                            return cleaned_groups  # Return the first result as fallback
-                    
-                    # Check if all words are now included
-                    all_grouped_words = set()
-                    for group in final_groups:
-                        for word in group:
-                            all_grouped_words.add(word)
-                    
-                    missing_words = [word for word in words if word not in all_grouped_words]
-                    if missing_words:
-                        print(f"Warning: {len(missing_words)} words still not included after second attempt")
-                    
-                    return final_groups
-                    
-                except json.JSONDecodeError as e:
-                    print(f"JSON parsing error in second response: {e}")
-                    print(f"Failed to parse: {cleaned_response}")
-                    return cleaned_groups  # Return the first result as fallback
+            Words to add:
+            {unused_formatted}
             
-            return cleaned_groups
+            Rules:
+            - Add each unused word to whichever existing group it fits best with semantically
+            - Maintain the existing groupings as much as possible
+            - Return ONLY the final complete groups as a JSON array of arrays
+            - Do not add any explanation, comments, or code formatting - just the raw JSON
+            """
+            
+            response = self.generate_text(second_prompt, model="gpt-4o")
+            print(f"Second response: {response.strip()}")
+            
+            # Clean and parse the second response
+            final_groups = self._clean_and_parse_json_response(response)
+            
+            # If we got a valid response, use it; otherwise fall back to the first result
+            if final_groups:
+                # Verify that all words are included
+                all_grouped_words = set()
+                for group in final_groups:
+                    for word in group:
+                        all_grouped_words.add(word)
                 
-        except json.JSONDecodeError as e:
-            print(f"JSON parsing error: {e}")
-            print(f"Failed to parse: {cleaned_response}")
-            # Return empty list as fallback
-            return []
+                missing_words = [word for word in words if word not in all_grouped_words]
+                if missing_words:
+                    print(f"Warning: {len(missing_words)} words still not included after second attempt")
+                
+                # Ensure that all groups meet the min/max size requirements
+                valid_groups = []
+                for group in final_groups:
+                    if len(group) >= group_min_size and len(group) <= group_max_size:
+                        valid_groups.append(group)
+                    else:
+                        # Try to split or merge groups that don't meet requirements
+                        if len(group) > group_max_size:
+                            # Split into multiple groups
+                            for i in range(0, len(group), group_max_size):
+                                chunk = group[i:i + group_max_size]
+                                if len(chunk) >= group_min_size:
+                                    valid_groups.append(chunk)
+                                elif valid_groups:  # Add to the last group if possible
+                                    valid_groups[-1].extend(chunk)
+                        elif len(group) < group_min_size and valid_groups:
+                            # Try to merge with the last group if it won't exceed max
+                            if len(valid_groups[-1]) + len(group) <= group_max_size:
+                                valid_groups[-1].extend(group)
+                            else:
+                                valid_groups.append(group)  # Keep as is if can't merge
+                
+                return valid_groups
+            else:
+                print("Failed to parse the second response, falling back to first grouping")
+        
+        # Ensure that all groups meet the min/max size requirements
+        valid_groups = []
+        for group in cleaned_groups:
+            if len(group) >= group_min_size and len(group) <= group_max_size:
+                valid_groups.append(group)
+            else:
+                # Try to split or merge groups that don't meet requirements
+                if len(group) > group_max_size:
+                    # Split into multiple groups
+                    for i in range(0, len(group), group_max_size):
+                        chunk = group[i:i + group_max_size]
+                        if len(chunk) >= group_min_size:
+                            valid_groups.append(chunk)
+                        elif valid_groups:  # Add to the last group if possible
+                            valid_groups[-1].extend(chunk)
+                elif len(group) < group_min_size and valid_groups:
+                    # Try to merge with the last group if it won't exceed max
+                    if len(valid_groups[-1]) + len(group) <= group_max_size:
+                        valid_groups[-1].extend(group)
+                    else:
+                        valid_groups.append(group)  # Keep as is if can't merge
+        
+        return valid_groups if valid_groups else [words]  # Fallback if no valid groups
 
+    def _clean_and_parse_json_response(self, response):
+        """Helper method to clean and parse JSON responses from the model."""
+        try:
+            # Start by trying to parse the raw response
+            try:
+                return json.loads(response.strip())
+            except json.JSONDecodeError:
+                pass
+                
+            # Clean up and try different formats
+            cleaned_response = response.strip()
+            
+            # Try to extract just the JSON array part by finding the first [ and last ]
+            start_idx = cleaned_response.find('[')
+            end_idx = cleaned_response.rfind(']')
+            
+            if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+                json_part = cleaned_response[start_idx:end_idx+1]
+                try:
+                    return json.loads(json_part)
+                except json.JSONDecodeError:
+                    pass
+            
+            # Remove code block markers if present
+            if cleaned_response.startswith("```") and "```" in cleaned_response[3:]:
+                cleaned_response = cleaned_response[3:]
+                end_marker = cleaned_response.rfind("```")
+                if end_marker != -1:
+                    cleaned_response = cleaned_response[:end_marker].strip()
+            
+            # Remove json language specifier if present
+            if cleaned_response.startswith("```json"):
+                cleaned_response = cleaned_response[7:].strip()
+                if "```" in cleaned_response:
+                    end_marker = cleaned_response.rfind("```")
+                    if end_marker != -1:
+                        cleaned_response = cleaned_response[:end_marker].strip()
+                        
+            # Try parsing again
+            try:
+                result = json.loads(cleaned_response)
+                
+                # Verify it's a list of lists
+                if isinstance(result, list) and all(isinstance(item, list) for item in result):
+                    return result
+                else:
+                    print(f"Parsed JSON is not a list of lists: {type(result).__name__}")
+                    return []
+            except json.JSONDecodeError as e:
+                print(f"JSON parsing error: {e}")
+                print(f"Failed to parse: {cleaned_response}")
+                return []
+        except Exception as e:
+            print(f"Unexpected error in JSON parsing: {str(e)}")
+            return []
+    
     def pair_voice_to_article(self, content, voices=None):
         """
         Determines the most suitable voice from the available voices to narrate given content.
