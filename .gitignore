@@ -1,5 +1,6 @@
 .venv
 .env
-bin
+bin/tmp
+bin/test/output
 extrainput/models
 cc.zh.300.bin.gz
