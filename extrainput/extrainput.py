@@ -23,19 +23,30 @@ class ExtraInputGenerator:
         {"name": "zh-CN-YunyeNeural", "description": "Male - Senior"},
         {"name": "zh-CN-XiaoqiuNeural", "description": "Female - Senior"},
     ]
+    
+    # Define supported OpenRouter models
+    openrouter_models = [
+        "deepseek/deepseek-r1:free",
+        "deepseek/deepseek-chat-v3-0324:free",
+        "qwen/qwen2.5-vl-32b-instruct:free"
+    ]
 
-    def __init__(self, openai_api_key, azure_speech_key, azure_speech_region, stabilityai_api_key):
+    def __init__(self, openrouter_api_key, azure_speech_key, azure_speech_region, stabilityai_api_key):
         """Initialize the ExtraInputGenerator with required API keys.
         
         Args:
-            openai_api_key (str): API key for OpenAI models
+            openrouter_api_key (str): API key for OpenRouter services
             azure_speech_key (str): API key for Azure Speech services
             azure_speech_region (str): Region for Azure Speech services
+            stabilityai_api_key (str): API key for StabilityAI image generation
         """
-        if not openai_api_key:
-            raise ValueError("OpenAI API key is required")
+        if not openrouter_api_key:
+            raise ValueError("OpenRouter API key is required")
         
-        self.openai_client = OpenAI(api_key=openai_api_key)
+        self.openai_client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=openrouter_api_key
+        )
         self.speech_key = azure_speech_key
         self.speech_region = azure_speech_region
         self.speech_config = SpeechConfig(subscription=azure_speech_key, region=azure_speech_region)
@@ -43,14 +54,15 @@ class ExtraInputGenerator:
         self.api_version = "2024-04-01"
         self.stabilityai_api_key = stabilityai_api_key
 
-    def generate_text(self, prompt, model="gpt-4o-mini"):
+    def generate_text(self, prompt, model="deepseek/deepseek-r1:free"):
         """Generate text based on a prompt using the specified model.
         
         Args:
             prompt (str): The prompt to generate text from
             model (str, optional): Model to use. Options: 
-                - "gpt-4o-mini" (default)
-                - "gpt-4o"
+                - "deepseek/deepseek-r1:free" (default)
+                - "deepseek/deepseek-chat-v3-0324:free"
+                - "qwen/qwen2.5-vl-32b-instruct:free"
                 
         Returns:
             str: Generated text response
@@ -58,7 +70,7 @@ class ExtraInputGenerator:
         Raises:
             ValueError: If an unsupported model is specified
         """
-        if model in ["gpt-4o-mini", "gpt-4o"]:
+        if model in self.openrouter_models:
             response = self.openai_client.chat.completions.create(
                 model=model,
                 messages=[
@@ -69,7 +81,8 @@ class ExtraInputGenerator:
             )
             return response.choices[0].message.content
         else:
-            raise ValueError(f"Unsupported model: {model}. Supported models: gpt-4o-mini, gpt-4o")
+            supported_models = ", ".join(self.openrouter_models)
+            raise ValueError(f"Unsupported model: {model}. Supported models: {supported_models}")
 
     def generate_image(self, prompt, output_filepath, aspect_ratio="16:9", output_format="png"):
         """Generate an image based on a prompt using stability AI.
@@ -404,7 +417,7 @@ class ExtraInputGenerator:
         """
 
         # Get response with json_mode=False
-        response = self.generate_text(prompt, model="gpt-4o")
+        response = self.generate_text(prompt, model="deepseek/deepseek-r1:free")
         
         # Clean up the response to extract just the JSON part
         cleaned_response = response.strip()
@@ -473,7 +486,7 @@ class ExtraInputGenerator:
                 - Return ONLY a valid JSON list of lists, with no explanations or markdown formatting
                 """
                 
-                response = self.generate_text(second_prompt, model="gpt-4o")
+                response = self.generate_text(second_prompt, model="deepseek/deepseek-r1:free")
                 
                 # Clean and parse the second response
                 cleaned_response = response.strip()
@@ -561,7 +574,7 @@ class ExtraInputGenerator:
         - the voice must match one of the names of the voices provided
         """
 
-        response = self.generate_text(prompt, model="gpt-4o-mini")
+        response = self.generate_text(prompt, model="deepseek/deepseek-r1:free")
         return response.strip()
 
     def generate_video(self, image_filepath, mp3_filepath, mp4_output_filepath):
