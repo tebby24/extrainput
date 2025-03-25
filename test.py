@@ -10,10 +10,10 @@ load_dotenv()
 # Set to True to run the test, False to skip
 TEST_CONFIG = {
     'text_generator': False,         # Test text generation
-    'image_generator': True,        # Test image generation
+    'image_generator': False,        # Test image generation
     'simple_tts': False,             # Test simple TTS
     'tts_with_subs': False,          # Test TTS with subtitles
-    'word_groups': False,            # Test word grouping
+    'word_groups': True,            # Test word grouping
     'voice_pairing': False,          # Test voice pairing
     'video_generator': False,        # Test video generation
 }
@@ -23,14 +23,14 @@ class TestExtraInput(unittest.TestCase):
         # Get API keys from environment variables
         self.azure_speech_key = os.getenv("AZURE_SPEECH_KEY")
         self.azure_speech_region = os.getenv("AZURE_SPEECH_REGION")
-        self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
         self.stabilityai_api_key = os.getenv("STABILITYAI_API_KEY")
         
         # Skip tests if credentials are not available
         if not all([self.azure_speech_key, self.azure_speech_region]):
             print("Warning: Azure Speech credentials not found, some tests will be skipped")
-        if not self.openai_api_key:
-            print("Warning: OPENAI_API_KEY not found, some tests will be skipped")
+        if not self.openrouter_api_key:
+            print("Warning: OPENROUTER_API_KEY not found, some tests will be skipped")
         if not self.stabilityai_api_key:
             print("Warning: STABILITYAI_API_KEY not found, image generation tests may fail")
         
@@ -51,9 +51,9 @@ class TestExtraInput(unittest.TestCase):
             print(f"Warning: Test image file not found at {self.test_image_path}")
             
         # Initialize the ExtraInputGenerator if credentials are available
-        if all([self.openai_api_key, self.azure_speech_key, self.azure_speech_region]):
+        if all([self.openrouter_api_key, self.azure_speech_key, self.azure_speech_region]):
             self.generator = ExtraInputGenerator(
-                openai_api_key=self.openai_api_key,
+                openrouter_api_key=self.openrouter_api_key,
                 azure_speech_key=self.azure_speech_key,
                 azure_speech_region=self.azure_speech_region,
                 stabilityai_api_key=self.stabilityai_api_key

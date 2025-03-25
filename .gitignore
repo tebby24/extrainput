@@ -1,2 +1,5 @@
+.venv
 .env
 bin
+extrainput/models
+cc.zh.300.bin.gz
