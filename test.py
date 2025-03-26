@@ -12,8 +12,8 @@ TEST_CONFIG = {
     'text_generator': False,         # Test text generation
     'image_generator': False,        # Test image generation
     'simple_tts': False,             # Test simple TTS
-    'tts_with_subs': False,          # Test TTS with subtitles
-    'word_groups': True,            # Test word grouping
+    'tts_with_subs': True,          # Test TTS with subtitles
+    'word_groups': False,            # Test word grouping
     'voice_pairing': False,          # Test voice pairing
     'video_generator': False,        # Test video generation
 }

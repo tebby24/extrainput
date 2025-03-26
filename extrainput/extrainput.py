@@ -359,7 +359,7 @@ class ExtraInputGenerator:
         if curr_group:
             subtitles.append(self._build_subtitle(curr_group, subtitle_index))
         
-        # Handle the special case with closing dialogue characters (both English and Chinese)
+        # Handle the special case with closing dialogue characters (Chinese style subtitle)
         i = 1
         while i < len(subtitles):
             if subtitles[i].content and subtitles[i].content[0] == '”':
@@ -367,7 +367,23 @@ class ExtraInputGenerator:
                 subtitles[i-1].content += subtitles[i].content[0]
                 subtitles[i].content = subtitles[i].content[1:]
             i += 1
-    
+        
+
+
+        # Handle the special case with closing dialogue characters (English style subtitle)
+        i = 1
+        needs_cosed = False
+        while i < len(subtitles):
+            if subtitles[i].content and subtitles[i].content[0] == '"':
+                if not needs_cosed:
+                    needs_cosed = True
+                else:
+                    # Move the closing quote to the end of the previous subtitle
+                    subtitles[i-1].content += subtitles[i].content[0]
+                    subtitles[i].content = subtitles[i].content[1:]
+                    needs_cosed = False
+            i += 1
+        
         # Strip whitespace from subtitles
         for subtitle in subtitles:
             subtitle.content = subtitle.content.lstrip(" \t\n")
@@ -698,7 +714,7 @@ class ExtraInputGenerator:
             start_idx = cleaned_response.find('[')
             end_idx = cleaned_response.rfind(']')
             
-            if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+            if (start_idx != -1) and (end_idx != -1) and (start_idx < end_idx):
                 json_part = cleaned_response[start_idx:end_idx+1]
                 try:
                     return json.loads(json_part)
