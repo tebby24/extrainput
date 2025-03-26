@@ -68,6 +68,7 @@ class ExtraInputGenerator:
                 - "deepseek/deepseek-r1:free" (default)
                 - "deepseek/deepseek-chat-v3-0324:free"
                 - "qwen/qwen2.5-vl-32b-instruct:free"
+                - "eva-unit-01/eva-qwen-2.5-72b"
                 
         Returns:
             str: Generated text response
