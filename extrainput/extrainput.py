@@ -33,7 +33,8 @@ class ExtraInputGenerator:
     openrouter_models = [
         "deepseek/deepseek-r1:free",
         "deepseek/deepseek-chat-v3-0324:free",
-        "qwen/qwen2.5-vl-32b-instruct:free"
+        "qwen/qwen2.5-vl-32b-instruct:free",
+        "eva-unit-01/eva-qwen-2.5-72b"
     ]
 
     def __init__(self, openrouter_api_key, azure_speech_key, azure_speech_region, stabilityai_api_key):
