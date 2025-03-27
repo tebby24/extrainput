@@ -339,7 +339,7 @@ class ExtraInputGenerator:
         This groups words into subtitle entries based on punctuation,
         keeping punctuation at the end of subtitles.
         """
-        chinese_punctuation = "，。！？、：—"  # Added the em dash "—"
+        chinese_punctuation = "，。！？、：—；"  # Added the em dash "—"
     
         subtitles = []
         curr_group = []
