@@ -6,5 +6,3 @@ moviepy==2.1.2
 requests==2.32.3
 srt==3.5.3
 typing_extensions==4.12.2
-fasttext==0.9.3
-scikit-learn==1.6.1

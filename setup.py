@@ -13,8 +13,6 @@ setup(
         "moviepy",
         "dotenv",
         "typing_extensions",
-        "fasttext",
-        "scikit-learn",
     ],
     author="Teddy Gonyea",
     description="A set of Python classes for generating language learning content",

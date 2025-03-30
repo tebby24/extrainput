@@ -12,8 +12,7 @@ TEST_CONFIG = {
     'text_generator': False,         # Test text generation
     'image_generator': False,        # Test image generation
     'simple_tts': False,             # Test simple TTS
-    'tts_with_subs': True,          # Test TTS with subtitles
-    'word_groups': False,            # Test word grouping
+    'tts_with_subs': False,          # Test TTS with subtitles
     'voice_pairing': False,          # Test voice pairing
     'video_generator': False,        # Test video generation
 }
@@ -157,27 +156,6 @@ class TestExtraInput(unittest.TestCase):
             self.assertTrue(os.path.exists(mp3_output_2))
             self.assertTrue(os.path.exists(srt_output_2))
     
-    def test_word_groups(self):
-        """Test word grouping functionality"""
-        if not self.generator:
-            self.skipTest("API credentials not available")
-            
-        # Test with sample words
-        words = [
-            "哲学", "经济", "政治", "文化", "历史", "科学", "技术", "创新", "发展", "社会",
-            "环境", "可持续", "全球化", "国际", "合作", "竞争", "挑战", "机遇", "战略", "分析",
-            "评估", "研究", "理论", "实践", "辩证", "矛盾", "统一", "本质", "现象", "规律",
-            "趋势", "预测", "假设", "论证", "批判", "思维", "意识", "形态", "价值观", "伦理",
-            "道德", "责任", "义务", "权利", "公平", "正义", "平等", "自由", "民主", "法治",
-            "效率", "效益", "质量", "风险", "管理", "沟通", "协调", "资源", "优化", "战略"
-        ]
-        grouped_words = self.generator.create_word_groups(words, group_min_size=8, group_max_size=12)
-        
-        # Check that we got a list of groups
-        self.assertTrue(isinstance(grouped_words, list))
-        
-        print(f"Grouped words: {grouped_words}")
-    
     def test_voice_pairing(self):
         """Test voice pairing functionality"""
         if not self.generator:
@@ -248,9 +226,6 @@ def run_tests():
         
     if TEST_CONFIG.get('tts_with_subs', False):
         suite.addTest(TestExtraInput('test_tts_with_subtitles'))
-        
-    if TEST_CONFIG.get('word_groups', False):
-        suite.addTest(TestExtraInput('test_word_groups'))
         
     if TEST_CONFIG.get('voice_pairing', False):
         suite.addTest(TestExtraInput('test_voice_pairing'))
