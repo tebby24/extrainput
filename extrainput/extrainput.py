@@ -33,7 +33,8 @@ class ExtraInputGenerator:
         "qwen/qwq-32b:free",
         "google/gemini-2.5-pro-exp-03-25:free",
         "google/gemini-2.0-flash-001",
-        "anthropic/claude-3.5-sonnet"
+        "anthropic/claude-3.5-sonnet",
+        "anthropic/claude-sonnet-4"
     ]
 
     def __init__(self, openrouter_api_key, azure_speech_key, azure_speech_region, stabilityai_api_key):
@@ -73,6 +74,7 @@ class ExtraInputGenerator:
                 - "google/gemini-2.5-pro-exp-03-25:free"
                 - "google/gemini-2.0-flash-001"
                 - "anthropic/claude-3.5-sonnet"
+                - "anthropic/claude-sonnet-4"
                 
         Returns:
             str: Generated text response
