@@ -60,7 +60,7 @@ class ExtraInputGenerator:
         self.api_version = "2024-04-01"
         self.stabilityai_api_key = stabilityai_api_key
 
-    def generate_text(self, prompt, model="deepseek/deepseek-r1:free"):
+    def generate_text(self, prompt, model="deepseek/deepseek-r1:free", temperature=1):
         """Generate text based on a prompt using the specified model.
         
         Args:
@@ -75,6 +75,8 @@ class ExtraInputGenerator:
                 - "google/gemini-2.0-flash-001"
                 - "anthropic/claude-3.5-sonnet"
                 - "anthropic/claude-sonnet-4"
+            temperature (float, optional): Controls randomness. Higher values (e.g., 1.0) make output more random, 
+                                         lower values (e.g., 0.1) make it more deterministic. Defaults to 1.
                 
         Returns:
             str: Generated text response
@@ -89,6 +91,7 @@ class ExtraInputGenerator:
                     {"role": "system", "content": "You are a helpful assistant"},
                     {"role": "user", "content": prompt},
                 ],
+                temperature=temperature,
                 stream=False
             )
             return response.choices[0].message.content
