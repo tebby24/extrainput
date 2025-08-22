@@ -23,19 +23,6 @@ class ExtraInputGenerator:
         {"name": "zh-CN-YunyeNeural", "description": "Male - Senior"},
         {"name": "zh-CN-XiaoqiuNeural", "description": "Female - Senior"},
     ]
-    
-    # Define supported OpenRouter models
-    openrouter_models = [
-        "deepseek/deepseek-r1:free",
-        "deepseek/deepseek-chat-v3-0324:free",
-        "qwen/qwen2.5-vl-32b-instruct:free",
-        "eva-unit-01/eva-qwen-2.5-72b",
-        "qwen/qwq-32b:free",
-        "google/gemini-2.5-pro-exp-03-25:free",
-        "google/gemini-2.0-flash-001",
-        "anthropic/claude-3.5-sonnet",
-        "anthropic/claude-sonnet-4"
-    ]
 
     def __init__(self, openrouter_api_key, azure_speech_key, azure_speech_region, stabilityai_api_key):
         """Initialize the ExtraInputGenerator with required API keys.
@@ -60,44 +47,28 @@ class ExtraInputGenerator:
         self.api_version = "2024-04-01"
         self.stabilityai_api_key = stabilityai_api_key
 
-    def generate_text(self, prompt, model="deepseek/deepseek-r1:free", temperature=1):
+    def generate_text(self, prompt, model="openai/gpt-4.1-nano", temperature=1):
         """Generate text based on a prompt using the specified model.
         
         Args:
             prompt (str): The prompt to generate text from
-            model (str, optional): Model to use. Options: 
-                - "deepseek/deepseek-r1:free" (default)
-                - "deepseek/deepseek-chat-v3-0324:free"
-                - "qwen/qwen2.5-vl-32b-instruct:free"
-                - "eva-unit-01/eva-qwen-2.5-72b"
-                - "qwen/qwq-32b:free"
-                - "google/gemini-2.5-pro-exp-03-25:free"
-                - "google/gemini-2.0-flash-001"
-                - "anthropic/claude-3.5-sonnet"
-                - "anthropic/claude-sonnet-4"
+            model (str, optional): Any OpenRouter model name. Defaults to "openai/gpt-4.1-nano"
             temperature (float, optional): Controls randomness. Higher values (e.g., 1.0) make output more random, 
                                          lower values (e.g., 0.1) make it more deterministic. Defaults to 1.
                 
         Returns:
             str: Generated text response
-            
-        Raises:
-            ValueError: If an unsupported model is specified
         """
-        if model in self.openrouter_models:
-            response = self.openai_client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant"},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=temperature,
-                stream=False
-            )
-            return response.choices[0].message.content
-        else:
-            supported_models = ", ".join(self.openrouter_models)
-            raise ValueError(f"Unsupported model: {model}. Supported models: {supported_models}")
+        response = self.openai_client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant"},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=temperature,
+            stream=False
+        )
+        return response.choices[0].message.content
 
     def generate_image(self, prompt, output_filepath, aspect_ratio="16:9", output_format="png"):
         """Generate an image based on a prompt using stability AI.
@@ -445,7 +416,7 @@ class ExtraInputGenerator:
         - the voice must match one of the names of the voices provided
         """
 
-        response = self.generate_text(prompt, model="deepseek/deepseek-r1:free")
+        response = self.generate_text(prompt, model="openai/gpt-4.1-nano")
         return response.strip()
 
     def generate_video(self, image_filepath, mp3_filepath, mp4_output_filepath):
