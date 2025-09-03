@@ -14,8 +14,6 @@ from typing import List
 
 class ExtraInputGenerator:
     voices = [
-        {"name": "zh-CN-YunxiaNeural", "description": "Male - Child"},
-        {"name": "zh-CN-XiaoshuangNeural", "description": "Female - Child"},
         {"name": "zh-CN-YunxiNeural", "description": "Male - Young Adult"},
         {"name": "zh-CN-XiaoxiaoNeural", "description": "Female - Young Adult"},
         {"name": "zh-CN-YunjianNeural", "description": "Male - Adult"},
